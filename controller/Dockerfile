@@ -78,6 +78,7 @@ RUN : \
         libpython3.10 \
         netbase \
         python3-pip \
+        sudo \
     && rm -rf /usr/lib/x86_64-linux-gnu/libLLVM-15.so.1 \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 

@@ -51,7 +51,7 @@ def publishDetections(trackFile, scene, objects, jdata):
 def main():
   args = build_argparser().parse_args()
 
-  schema_val = SchemaValidation(args.schema)
+  #schema_val = SchemaValidation(args.schema)
 
   if args.track:
     trackFile = open(args.track, "w")

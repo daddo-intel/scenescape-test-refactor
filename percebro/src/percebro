@@ -714,7 +714,7 @@ def main():
                         'frame': int(vdata.frameNum),
                         'objects': flatObjects
                         }
-          vdata.jsonFile.write(json.dumps(detections))
+          vdata.jsonFile.write(json.dumps(detections, default=_json_default))
           vdata.jsonFile.write("\n")
 
         if args.stats and len(cameraChain.orderedModels):

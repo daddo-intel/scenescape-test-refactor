@@ -14,7 +14,7 @@ import sys
 import json
 
 from scene_common.geometry import Region, Tripwire
-from scene_common.scene_model import SceneModel
+from controller.scene import Scene
 from scene_common.camera import Camera
 
 class SceneLoader:
@@ -24,7 +24,7 @@ class SceneLoader:
   config = None
   scenes = {}
 
-  def __init__(self, path, scene_model=SceneModel):
+  def __init__(self, path, scene_model=Scene):
     sys.stdout.flush()
     SceneLoader.configFile = path
     if os.path.exists(SceneLoader.configFile) \

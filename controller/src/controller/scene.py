@@ -12,7 +12,7 @@
 import cv2
 import itertools
 import numpy as np
-
+import json
 from controller.ilabs_tracking import IntelLabsTracking
 from controller.tracking import (MAX_UNRELIABLE_TIME,
                                  NON_MEASUREMENT_TIME_DYNAMIC,
@@ -152,7 +152,8 @@ class Scene(SceneModel):
             obj['bounding_box'] = {'x': agnosticx, 'y': agnosticy, 'width': agnosticw, 'height': agnostich}
 
       objects = self._createMovingObjectsForDetection(detection_type, detections, when, camera)
-      self.finishProcessing(detection_type, when, objects)
+
+      self.finishProcessing(jdata, detection_type, when, objects)
     return True
 
   def processSceneData(self, jdata, child, cameraPose,
@@ -190,8 +191,8 @@ class Scene(SceneModel):
     self.finishProcessing(detectionType, when, objects, child_objects)
     return True
 
-  def finishProcessing(self, detectionType, when, objects, already_tracked_objects=[]):
-    self.updateVisible(objects)
+  def finishProcessing(self, jdata, detectionType, when, objects, already_tracked_objects=[]):
+    self.updateVisible(jdata, objects)
     self.tracker.trackObjects(objects, already_tracked_objects, when, [detectionType],
                               self.ref_camera_frame_rate,
                               self.max_unreliable_time,
@@ -343,17 +344,28 @@ class Scene(SceneModel):
 
     return updated
 
-  def updateVisible(self, curObjects):
+  def updateVisible(self, jdata, curObjects):
     """! Update the visibility of objects from cameras in the scene."""
     for obj in curObjects:
       vis = []
 
-      for sname in self.cameras:
-        camera = self.cameras[sname]
-        if hasattr(camera, 'pose') and hasattr(camera.pose, 'regionOfView') \
-           and camera.pose.regionOfView.isPointWithin(obj.sceneLoc):
-          vis.append(camera.cameraID)
-
+      with open('visibility.txt', 'a') as f:
+        for sname in self.cameras:
+          camera = self.cameras[sname]
+          if hasattr(camera, 'pose') and hasattr(camera.pose, 'regionOfView') \
+            and camera.pose.regionOfView.isPointWithin(obj.sceneLoc):
+            vis.append(camera.cameraID)
+            #f.write('in field of view!!!!')
+            #json.dump(jdata, f, indent=4)
+            #f.write('{},{},{}'.format(obj.sceneLoc.x, obj.sceneLoc.y, obj.sceneLoc.z))
+            print("DKAIn filed of view!")
+            print(obj.camLoc)
+          else:
+            print("Not in filed of view!")
+            print(obj.camLoc)
+            #f.write('Not in field of view!!!!')
+            #json.dump(jdata, f, indent=4)
+            #f.write('{},{},{}'.format(obj.sceneLoc.x, obj.sceneLoc.y, obj.sceneLoc.z))
       obj.visibility = vis
     return
 

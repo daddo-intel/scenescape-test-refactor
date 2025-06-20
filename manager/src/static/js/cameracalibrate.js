@@ -34,7 +34,8 @@ import {
 import {
   compareIntrinsics,
   resizeRendererToDisplaySize,
-  waitUntil
+  waitUntil,
+  metersToPixels
 } from "/static/js/utils.js";
 
 export class ConvergedCameraCalibration {
@@ -282,27 +283,37 @@ export class ConvergedCameraCalibration {
     }
     if (points.length % 5 === 0) {
       const splitPoint = (points.length / 5) * 2;
+      console.log("Cam canvas points")
       for (let i = 0; i < splitPoint; i+=2) {
         const x = parseFloat(points[i]);
         const y = parseFloat(points[i + 1]);
         this.camCanvas.addCalibrationPoint(x, y);
+        console.log(x,y)
       }
+      console.log("Viewport canvas points")
       for (let i = splitPoint; i < points.length; i+=3) {
         const x = parseFloat(points[i]);
         const y = parseFloat(points[i + 1]);
         const z = parseFloat(points[i + 2]);
         this.viewport.addCalibrationPoint(x, y, z);
+        let x1 = metersToPixels(x, 30, 480);
+        let y1 = metersToPixels(y, 30, 480);
+        console.log(x1,y1)
       }
     } else if (points.length % 2 === 0) {
       const splitPoint = points.length / 2;
+      console.log("Cam canvas points")
       for (let i = 0; i < splitPoint; i+=2) {
         const x = parseFloat(points[i]);
         const y = parseFloat(points[i + 1]);
+        console.log(x,y)
         this.camCanvas.addCalibrationPoint(x, y);
       }
+      console.log("Viewport canvas points")
       for (let i = splitPoint; i < points.length; i+=2) {
         const x = parseFloat(points[i]);
         const y = parseFloat(points[i + 1]);
+        console.log(x,y)
         this.viewport.addCalibrationPoint(x, y, 0);
       }
     }

@@ -13,7 +13,7 @@
 
 import {
   FX, FY, CX, CY,
-  K1, K2, P1, P2, K3
+  K1, K2, P1, P2, K3, REST_URL
 } from "/static/js/constants.js";
 
 // Convert a point from pixels to meters
@@ -143,4 +143,111 @@ function checkWebSocketConnection(url) {
   });
 }
 
-export { pixelsToMeters, metersToPixels, compareIntrinsics, waitUntil, initializeOpencv, resizeRendererToDisplaySize, checkWebSocketConnection };
+async function getResource(folder, window) {
+  try {
+    const response = await fetch(`https://${window.location.hostname}/media/list/${folder}/`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const files = data.files.filter(filename => !filename.endsWith('.json'));
+    
+    console.log("Files excluding .json:", files);
+    return files;
+
+  } catch (err) {
+    console.error("Error fetching file list:", err);
+    return [];
+  }
+}
+
+async function uploadResource(file, authToken, jsonData) {
+  const formData = new FormData();
+  formData.append('map', file);
+  formData.append('name', jsonData.name);
+  formData.append('uid', jsonData.uid)
+
+  console.log(authToken);
+  try {
+    const response = await fetch(`${REST_URL}/scene`, {
+      method: 'POST',
+      headers: {
+      'Authorization': authToken
+      },
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create scene: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    console.log('scene created:', data);
+    return data;
+
+  } catch (err) {
+    console.error('Error in scene creation:', err);
+    return null;
+  }
+}
+
+async function importScene(zipURL, restClient, basename, window, authToken) {
+  try {
+    const jsonResponse = await fetch(zipURL + '/' + basename + '.json');
+
+    if (!jsonResponse.ok) {
+      throw new Error(`Failed to fetch JSON: ${response.statusText}`);
+    }
+    const jsonData = await jsonResponse.json();  // Parse JSON response
+    console.log("Parsed JSON Data:", jsonData);
+    const files = await getResource(basename, window);
+    const resourceUrl = `/media/${basename}/${files[0]}`;
+    console.log("Resource file found:", resourceUrl);
+
+    const response = await fetch(resourceUrl);
+    if (!response.ok) {
+      throw new Error('Failed to fetch file');
+    }
+    const blob = await response.blob();
+
+    // Convert Blob to File with desired filename
+    console.log(blob.type)
+    const file = new File([blob], `${jsonData.name}.png`, { type: blob.type });
+    const resp = await uploadResource(file, authToken, jsonData);
+    if (resp) {
+      const scene_id = resp.uid;
+      delete jsonData.name;
+      delete jsonData.map
+      let cameras = jsonData.cameras;
+
+      const updateResponse = await restClient.updateScene(scene_id, jsonData);
+      console.log('DKA')
+      console.log(updateResponse)
+
+      for (let cam of cameras) {
+        let cameraData = {
+          'name': cam.name,
+          'transform_type': 'euler',
+          'translation': cam.translation,
+          'scene': scene_id,
+          'rotation': cam.rotation,
+          // 'intrinsics': cam.intrinsics,
+          // 'distortion': cam.distortion,
+          'scale': cam.scale
+        };
+        const createResponse = await restClient.createCamera(cameraData);
+        console.log('DKA - 2')
+        console.log(createResponse)
+      }
+
+    } else {
+      console.log('Scene creation failed.');
+    }
+  } catch (err) {
+    console.error("Error processing scene import:", err);
+  }
+}
+
+export { pixelsToMeters, metersToPixels, compareIntrinsics, waitUntil, initializeOpencv, resizeRendererToDisplaySize, checkWebSocketConnection, importScene };

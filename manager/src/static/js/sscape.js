@@ -33,8 +33,10 @@ import {
 import {
   metersToPixels,
   pixelsToMeters,
-  checkWebSocketConnection
+  checkWebSocketConnection,
+  importScene
 } from "/static/js/utils.js";
+import RESTClient from '/static/js/restclient.js';
 
 var s = Snap("#svgout");
 var points, maps, rois, tripwires, child_rois, child_tripwires, child_sensors;
@@ -1724,6 +1726,88 @@ $(document).ready(function () {
   const loginButton = document.getElementById('login-submit');
   const spinner = document.getElementById('login-spinner');
   const loginText = document.getElementById('login-text');
+  const exportScene = document.getElementById('export-scene');
+  const importButton = document.getElementById('scene_import');
+  const tokenElement = document.getElementById("auth-token");
+
+  if (importButton) {
+  importButton.onclick = async function (e) {
+    console.log("Import button clicked!");
+    e.preventDefault();
+    const inputElement = e.target;
+    const formData = new FormData(inputElement.form);
+    const authToken = `Token ${tokenElement.value}`;
+    const restclient = new RESTClient(REST_URL, authToken);
+
+    fetch("", {
+      method: "POST",
+      body: formData,
+    })
+    .then(response => {
+      if (!response.ok) throw new Error("Network response was not OK");
+      return response.text();  // or response.json() if server returns JSON
+    })
+    .then(data => {
+      console.log("Import Success");
+      let zipFile = document.getElementById('id_zipFile');
+      zipFile = zipFile.value.split('\\').pop();
+      const basename = zipFile.replace(/\.[^/.]+$/, '');
+      const zipFileURL = "https://" + window.location.hostname + "/media/" + basename + '/';
+      
+      importScene(zipFileURL, restclient, basename, window, authToken)
+    })
+    .catch(error => {
+      console.error("Error:", error);
+    });
+  };
+  }
+
+  if (exportScene) {
+  exportScene.onclick = async function () {
+  try {
+    const response = await restclient.getScene(scene_id);
+    if (response.statusCode !== 200) throw new Error("Failed to fetch scenes");
+
+    const scene = response.content;
+    const zip = new JSZip();
+
+    // Add JSON
+    zip.file(scene.name + ".json", JSON.stringify(scene, null, 2));
+
+    // Add referenced media
+    const sceneName = scene.name.replace(/\s+/g, "_");
+
+    // Fetch the map image
+    if (scene.map) {
+      try {
+        const mapBlob = await fetchFileAsBlob(scene.map);
+        const mapName = scene.map.split('/').pop();
+        zip.file(`${sceneName}/${mapName}`, mapBlob);
+      } catch (err) {
+        console.warn(`Skipping map for ${sceneName}:`, err);
+      }
+    }
+
+    // Download the zip
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(zipBlob);
+    link.download = scene.name + ".zip";
+    link.click();
+    URL.revokeObjectURL(link.href);
+
+  } catch (error) {
+    console.error("Error exporting scene:", error);
+  }
+  };
+  }
+
+  async function fetchFileAsBlob(url) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch: ${url}`);
+    return await response.blob();
+  }
+
   function checkDatabaseReady() {
     fetch(`${REST_URL}/database-ready`)
       .then(response => response.json())

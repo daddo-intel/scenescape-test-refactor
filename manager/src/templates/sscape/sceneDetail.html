@@ -20,6 +20,9 @@
   </a>
   {% endif %}
   <a class="btn btn-secondary btn-sm float-right right-buffer" id="3d-view" href="{% url 'scene_detail' scene.id %}" title="View {{ scene.name }} in 3D">3D</a>
+  <a class="btn btn-secondary btn-sm float-right right-buffer" id="export-scene" title="Export {{ scene.name }}">
+    <i class="bi bi-box-arrow-up"></i>
+  </a>
   <div class="float-right text-muted right-buffer">
     Rate: <span id="scene-rate">--</span> Hz
   </div>
@@ -598,5 +601,5 @@
     </div>
   </div>
 </div>
-
+<input type="hidden" name="auth-token" id="auth-token" value="{{ user.auth_token }}" />
 {% endblock %}

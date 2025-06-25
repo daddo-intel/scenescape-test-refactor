@@ -16,6 +16,7 @@ import socket
 import time
 from collections import namedtuple
 from uuid import UUID
+import zipfile
 
 from django.conf import settings
 from django.contrib.admin.views.decorators import user_passes_test
@@ -40,9 +41,9 @@ from manager.models import Scene, ChildScene, \
   SingletonSensor, SingletonScalarThreshold, \
   Region, RegionPoint, Tripwire, TripwirePoint, \
   SingletonAreaPoint, UserSession, FailedLogin, DatabaseStatus, \
-  RegionOccupancyThreshold, CalibrationMarker
+  RegionOccupancyThreshold, CalibrationMarker, SceneImport
 from manager.forms import CamCalibrateForm, ROIForm, SingletonForm, SingletonDetailsForm, \
-  SceneUpdateForm, CamCreateForm, SingletonCreateForm, ChildSceneForm
+  SceneUpdateForm, SceneImportForm, CamCreateForm, SingletonCreateForm, ChildSceneForm
 from scene_common.options import *
 from scene_common.scene_model import SceneModel
 from scene_common.transform import applyChildTransform
@@ -138,6 +139,13 @@ def protected_media(request, path, media_root):
         return response
     return HttpResponseNotFound()
   return HttpResponse("401 Unauthorized", status=401)
+
+def list_resources(request, folder_name):
+    base_path = os.path.join(settings.MEDIA_ROOT, folder_name)
+    if not os.path.exists(base_path) or not os.path.isdir(base_path):
+        return JsonResponse({"error": "Invalid folder"}, status=400)
+    files = [f for f in os.listdir(base_path) if os.path.isfile(os.path.join(base_path, f))]
+    return JsonResponse({"files": files})
 
 @login_required(login_url="sign_in")
 def sceneDetail(request, scene_id):
@@ -337,6 +345,43 @@ class SceneUpdateView(SuperUserCheck, UpdateView):
   form_class = SceneUpdateForm
   template_name = "scene/scene_update.html"
   success_url = reverse_lazy('index')
+
+class SceneImportView(SuperUserCheck, CreateView):
+  model = SceneImport
+  form_class = SceneImportForm #Can just say all and remove SceneImportForm
+  template_name = "scene/scene_import.html"
+  success_url = reverse_lazy('index')
+
+  def form_valid(self, form):
+    response = super().form_valid(form)
+    print('SceneImportView - DKA ', response)
+
+    # Get uploaded file path
+    zip_instance = self.object  # SceneImport model instance
+    zip_file = zip_instance.zipFile  # adjust based on your model field name
+
+    zip_path = zip_file.path  # Full path to saved zip
+
+    print('zip_path is ', zip_path)
+
+    extract_dir = os.path.splitext(zip_path)[0]  # remove .zip extension
+    os.makedirs(extract_dir, exist_ok=True)
+
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+      for member in zip_ref.namelist():
+        filename = os.path.basename(member)
+        if not filename:
+            continue  # skip directories
+
+        source = zip_ref.open(member)
+        target_path = os.path.join(extract_dir, filename)
+
+        with open(target_path, "wb") as target:
+            with source as source_file:
+                target.write(source_file.read())
+
+    print(f"ZIP extracted to: {extract_dir}")
+    return response
 
 #Singleton Sensor CRUD
 class SingletonSensorCreateView(SuperUserCheck, CreateView):

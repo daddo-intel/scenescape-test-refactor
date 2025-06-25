@@ -86,6 +86,9 @@ class UserSession(models.Model):
   user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
   session = models.OneToOneField(Session, on_delete=models.CASCADE)
 
+class SceneImport(models.Model):
+  zipFile = models.FileField(null=True, blank=True, editable=True)
+
 class Scene(models.Model):
   #FIXME: enable manual as an option. Auto calibration compute should be performed when manual is chosen.
   #This will avoid utilizing compute resources unnecessarily.

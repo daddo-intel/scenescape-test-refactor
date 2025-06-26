@@ -143,6 +143,27 @@ function checkWebSocketConnection(url) {
   });
 }
 
+async function bulkCreate(items, scene_id, createFn, label) {
+  if (!items || items.length === 0) {
+    return;
+  }
+  const tasks = items.map(item => {
+    item.scene = scene_id;
+    if (scene_id) {
+      item.scene = scene_id;
+    }
+    return createFn(item)
+      .then(response => {
+        console.log(`DKA - ${label} Response:`, response.errors);
+        return response.errors;
+      })
+      .catch(err => {
+        console.error(`Error creating ${label}:`, err);
+      });
+  });
+  await Promise.all(tasks);
+}
+
 async function getResource(folder, window) {
   try {
     const response = await fetch(`https://${window.location.hostname}/media/list/${folder}/`);
@@ -167,24 +188,34 @@ async function uploadResource(file, authToken, jsonData) {
   const formData = new FormData();
   formData.append('map', file);
   formData.append('name', jsonData.name);
-  formData.append('uid', jsonData.uid)
-
   console.log(authToken);
+
   try {
     const response = await fetch(`${REST_URL}/scene`, {
       method: 'POST',
       headers: {
-      'Authorization': authToken
+        'Authorization': authToken
       },
       body: formData
     });
 
+    const responseText = await response.text();
+
     if (!response.ok) {
-      throw new Error(`Failed to create scene: ${response.statusText}`);
+      console.error(`Failed to create scene: ${response.status} ${response.statusText}`);
+      console.error('Response body:', responseText);
+      throw new Error(`Server returned ${response.status}`);
     }
 
-    const data = await response.json();
-    console.log('scene created:', data);
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.warn('Response is not valid JSON:', responseText);
+      data = responseText;
+    }
+
+    console.log('Scene created:', data);
     return data;
 
   } catch (err) {
@@ -194,57 +225,85 @@ async function uploadResource(file, authToken, jsonData) {
 }
 
 async function importScene(zipURL, restClient, basename, window, authToken) {
+  //Issues
+  //upload gets renamed if uploading same file
+  //refresh page after upload is completed
+  //clean up
+  //Being able to show feedback to user when things error out
+  //Calibration points get carried
+  //scene hierarchy in is being carried
+
   try {
-    const jsonResponse = await fetch(zipURL + '/' + basename + '.json');
+    const jsonResponse = await fetch(`${zipURL}/${basename}.json`);
 
     if (!jsonResponse.ok) {
-      throw new Error(`Failed to fetch JSON: ${response.statusText}`);
+      throw new Error(`Failed to fetch JSON: ${jsonResponse.statusText}`);
     }
-    const jsonData = await jsonResponse.json();  // Parse JSON response
+
+    const jsonData = await jsonResponse.json();
     console.log("Parsed JSON Data:", jsonData);
+
     const files = await getResource(basename, window);
     const resourceUrl = `/media/${basename}/${files[0]}`;
     console.log("Resource file found:", resourceUrl);
 
     const response = await fetch(resourceUrl);
     if (!response.ok) {
-      throw new Error('Failed to fetch file');
+      throw new Error('Failed to fetch resource file');
     }
+
     const blob = await response.blob();
-
-    // Convert Blob to File with desired filename
-    console.log(blob.type)
-    const file = new File([blob], `${jsonData.name}.png`, { type: blob.type });
-    const resp = await uploadResource(file, authToken, jsonData);
-    if (resp) {
-      const scene_id = resp.uid;
-      delete jsonData.name;
-      delete jsonData.map
-      let cameras = jsonData.cameras;
-
-      const updateResponse = await restClient.updateScene(scene_id, jsonData);
-      console.log('DKA')
-      console.log(updateResponse)
-
-      for (let cam of cameras) {
-        let cameraData = {
-          'name': cam.name,
-          'transform_type': 'euler',
-          'translation': cam.translation,
-          'scene': scene_id,
-          'rotation': cam.rotation,
-          // 'intrinsics': cam.intrinsics,
-          // 'distortion': cam.distortion,
-          'scale': cam.scale
-        };
-        const createResponse = await restClient.createCamera(cameraData);
-        console.log('DKA - 2')
-        console.log(createResponse)
-      }
-
-    } else {
-      console.log('Scene creation failed.');
+    const blobType = blob.type.split('/')[1];
+    let fileType = '.png'
+    if (blobType === 'gltf-binary') {
+      fileType = '.glb';
     }
+    console.log('resource type', blob.type);
+    const file = new File([blob], `${jsonData.name}${fileType}`, { type: blob.type });
+
+    const resp = await uploadResource(file, authToken, jsonData);
+
+    if (!resp) {
+      console.error('Scene creation failed.');
+      return;
+    }
+    const scene_id = resp.uid;
+    const sceneData = {
+      scale: jsonData.scale,
+      regulate_rate: jsonData.regulate_rate,
+      external_update_rate: jsonData.external_update_rate,
+      camera_calibration: jsonData.camera_calibration,
+      apriltag_size: jsonData.apriltag_size,
+      number_of_localizations: jsonData.number_of_localizations,
+      global_feature: jsonData.global_feature,
+      minimum_number_of_matches: jsonData.minimum_number_of_matches,
+      inlier_threshold: jsonData.inlier_threshold,
+      output_lla: jsonData.output_lla
+    };
+
+    const updateResponse = await restClient.updateScene(scene_id, sceneData);
+    console.log('Scene updated:', updateResponse);
+
+    // Bulk creation of resources
+    await bulkCreate(
+      jsonData.cameras.map(cam => ({
+        name: cam.name,
+        transform_type: 'euler',
+        translation: cam.translation,
+        scene: scene_id,
+        rotation: cam.rotation,
+        scale: cam.scale
+      })),
+      scene_id,
+      restClient.createCamera.bind(restClient),
+      'Camera'
+    );
+
+    await bulkCreate(jsonData.regions, scene_id, restClient.createRegion.bind(restClient), 'Region');
+    await bulkCreate(jsonData.tripwires, scene_id, restClient.createTripwire.bind(restClient), 'Tripwire');
+    await bulkCreate(jsonData.sensors, scene_id, restClient.createSensor.bind(restClient), 'Sensor');
+    await bulkCreate(jsonData.object_library, null, restClient.createAsset.bind(restClient), 'Assets');
+
   } catch (err) {
     console.error("Error processing scene import:", err);
   }

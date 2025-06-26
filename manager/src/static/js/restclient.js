@@ -202,7 +202,11 @@ class RESTResult {
   }
 
   _parseErrorMessage(response) {
-    debugger;
+    for (const key in response.data) {
+      if (Array.isArray(response.data[key]) && response.data[key].length > 0) {
+        return response.data[key][0];
+      }
+    }
     if (response.data.constructor == Object && 'detail' in response.data) {
       return response.data.detail;
     }

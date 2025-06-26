@@ -1764,11 +1764,18 @@ $(document).ready(function () {
 
   if (exportScene) {
   exportScene.onclick = async function () {
+  const authToken = `Token ${tokenElement.value}`;
+  const restclient = new RESTClient(REST_URL, authToken);
   try {
     const response = await restclient.getScene(scene_id);
     if (response.statusCode !== 200) throw new Error("Failed to fetch scenes");
 
+    const assetsResponse = await restclient.getAssets({});;
+    if (assetsResponse.statusCode !== 200)throw new Error("Failed to fetch assets");
+
+    const assets = assetsResponse.content.results;
     const scene = response.content;
+    scene.object_library = assets
     const zip = new JSZip();
 
     // Add JSON
@@ -1781,8 +1788,8 @@ $(document).ready(function () {
     if (scene.map) {
       try {
         const mapBlob = await fetchFileAsBlob(scene.map);
-        const mapName = scene.map.split('/').pop();
-        zip.file(`${sceneName}/${mapName}`, mapBlob);
+        const mapExt = scene.map.split('.').pop();
+        zip.file(`${sceneName}.${mapExt}`, mapBlob);
       } catch (err) {
         console.warn(`Skipping map for ${sceneName}:`, err);
       }

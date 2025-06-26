@@ -219,6 +219,20 @@ class Scene(models.Model):
     self.translation_z = 0.0
     return
 
+  def notifydbupdate(self):
+    transaction.on_commit(sendUpdateCommand)
+    return
+
+  def saveThumbnail(self):
+    img_data, pixels_per_meter = generateOrthoView(self, self.map.path)
+    self.scale = pixels_per_meter
+    img = Image.fromarray(np.uint8(img_data))
+    with ContentFile(b'') as imgfile:
+      img.save(imgfile, format='PNG')
+      self.thumbnail_path = self.name + '_2d.png'
+      self.thumbnail.save(self.name + '_2d.png', imgfile, save=False)
+    return
+
   def save(self, *args, **kwargs):
     updated_scene = self.id
     self.dataset_dir = f"{os.getcwd()}/datasets/{self.name}"
@@ -255,12 +269,7 @@ class Scene(models.Model):
         else:
           ext = os.path.splitext(self.map.path)[1].lower()
           if ext == ".glb":
-            img_data, pixels_per_meter = generateOrthoView(self, self.map.path)
-            self.scale = pixels_per_meter
-            img = Image.fromarray(np.uint8(img_data))
-            with ContentFile(b'') as imgfile:
-              img.save(imgfile, format='PNG')
-              self.thumbnail.save(self.name + '_2d.png', imgfile, save=False)
+            self.saveThumbnail()
           else:
             self.thumbnail = None
             self.resetRotation()

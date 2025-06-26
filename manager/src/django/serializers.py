@@ -24,6 +24,7 @@ from manager.models import Asset3D, Cam, ChildScene, Region, RegionPoint, Scene,
 from scene_common.options import *
 from scene_common.timestamp import DATETIME_FORMAT
 from scene_common.transform import CameraPose, CameraIntrinsics
+import os
 
 class CustomAuthTokenSerializer(serializers.Serializer):
   username = serializers.CharField(max_length=150)
@@ -572,6 +573,8 @@ class SceneSerializer(NonNullSerializer):
     parent_uid = None
     transform = None
     output_lla = validated_data.get('output_lla', None)
+    map_path = validated_data.get('map', None)
+
     if output_lla:
       instance.scenescapeScene.output_lla = output_lla
     self.handleMeshTransform(self.initial_data, validated_data)
@@ -585,6 +588,14 @@ class SceneSerializer(NonNullSerializer):
     if not is_update:
       instance = super().create(validated_data)
 
+    if map_path:
+      map_path = '/media/' + map_path.name
+      ext = os.path.splitext(map_path)[1].lower()
+      if ext == ".glb":
+        instance.autoAlignSceneMap()
+        instance.saveThumbnail()
+        instance.save()
+
     if parent_uid:
       self.link_parent(parent_uid, instance)
     if transform and hasattr(instance, 'parent') and instance.parent:
@@ -594,6 +605,9 @@ class SceneSerializer(NonNullSerializer):
 
     if is_update:
       super().update(instance, validated_data)
+
+    instance.notifydbupdate()
+
     return instance
 
   def create(self, validated_data):

@@ -1,13 +1,6 @@
-# Copyright (C) 2025 Intel Corporation
-#
-# This software and the related documents are Intel copyrighted materials,
-# and your use of them is governed by the express license under which they
-# were provided to you ("License"). Unless the License provides otherwise,
-# you may not use, modify, copy, publish, distribute, disclose or transmit
-# this software or the related documents without Intel's prior written permission.
-#
-# This software and the related documents are provided as is, with no express
-# or implied warranties, other than those that are expressly stated in the License.
+# SPDX-FileCopyrightText: (C) 2025 Intel Corporation
+# SPDX-License-Identifier: LicenseRef-Intel-Edge-Software
+# This file is licensed under the Limited Edge Software Distribution License Agreement.
 
 # ================ Makefile for Intel® SceneScape ====================
 
@@ -93,6 +86,22 @@ help:
 	@echo "  run_basic_acceptance_tests  Run basic acceptance tests"
 	@echo "  run_performance_tests       Run performance tests"
 	@echo "  run_stability_tests         Run stability tests"
+	@echo ""
+	@echo "  lint-all                    Lint entire code base"
+	@echo "  lint-python                 Lint python files"
+	@echo "  lint-python-pylint          Lint python files using pylint"
+	@echo "  lint-python-flake8          Lint python files using flake8"
+	@echo "  lint-javascript             Lint javascript files"
+	@echo "  lint-cpp                    Lint C++ files"
+	@echo "  lint-html                   Lint HTML files"
+	@echo "  lint-dockerfiles            Lint Dockerfiles"
+	@echo "  lint-shell                  Lint shell files"
+	@echo "  prettier-check              Run prettier check on all supported files"
+	@echo ""
+	@echo "  format-python               Format python files using autopep8"
+	@echo "  prettier-write              Format code using prettier"
+	@echo ""
+	@echo "  add-licensing FILE=<file>   Add licensing headers to a file"
 	@echo ""
 	@echo "Usage:"
 	@echo "  - Use 'SUPASS=<password> make build-all demo' to build Intel® SceneScape and run demo."
@@ -272,6 +281,86 @@ run_basic_acceptance_tests:
 	@echo "Running basic acceptance tests..."
 	$(MAKE) --trace -C tests basic-acceptance-tests -j 1 SUPASS=$(SUPASS) || (echo "Basic acceptance tests failed" && exit 1)
 	@echo "DONE ==> Running basic acceptance tests"
+
+# ============================= Lint ==================================
+
+.PHONY: lint-all
+lint-all: lint-python lint-javascript lint-cpp lint-shell lint-html lint-dockerfiles prettier-check
+	@echo "==> Linting entire code base..."
+	$(MAKE) lint-python
+	@echo "DONE ==> Linting entire code base":
+
+.PHONY: lint-python
+lint-python: lint-python-pylint lint-python-flake8
+
+.PHONY: lint-python-pylint
+lint-python-pylint:
+	@echo "==> Linting Python files - pylint..."
+	@pylint ./*/src tests/* tools/* || (echo "Python linting failed" && exit 1)
+	@echo "DONE ==> Linting Python files - pylint"
+
+.PHONY: lint-python-flake8
+lint-python-flake8:
+	@echo "==> Linting Python files - flake8..."
+	@flake8 || (echo "Python linting failed" && exit 1)
+	@echo "DONE ==> Linting Python files - flake8"
+
+.PHONY: lint-javascript
+lint-javascript:
+	@echo "==> Linting JavaScript files..."
+	@find . -name '*.js'  | xargs npx eslint -c .github/resources/eslint.config.js --no-warn-ignored || (echo "Javascript linting failed" && exit 1)
+	@echo "DONE ==> Linting JavaScript files"
+
+.PHONY: lint-cpp
+lint-cpp:
+	@echo "==> Linting C++ files..."
+	@find . -name '*.c' -o -name '*.cpp' -o -name '*.h'  | xargs cpplint || (echo "C++ linting failed" && exit 1)
+	@echo "DONE ==> Linting C++ files"
+
+.PHONY: lint-shell
+SH_FILES := $(shell find . -type f \( -name '*.sh' \) -print )
+lint-shell:
+	@echo "==> Linting Shell files..."
+	@shellcheck -x -S style $(SH_FILES) || (echo "Shell linting failed" && exit 1)
+	@echo "DONE ==> Linting Shell files"
+
+.PHONY: lint-html
+lint-html:
+	@echo "==> Linting HTML files..."
+	@find . -name '*.html' | xargs htmlhint || (echo "HTML linting failed" && exit 1)
+	@echo "DONE ==> Linting HTML files"
+
+.PHONY: lint-dockerfiles
+lint-dockerfiles:
+	@echo "==> Linting Dockerfiles..."
+	@find . -name '*Dockerfile*' | xargs hadolint || (echo "Dockerfile linting failed" && exit 1)
+	@echo "DONE ==> Linting Dockerfiles"
+
+.PHONY: prettier-check
+prettier-check:
+	@echo "==> Checking style with prettier..."
+	@npx prettier --check . || (echo "Prettier check failed - run `make prettier-write` to fix" && exit 1)
+	@echo "DONE ==> Checking style with prettier"
+
+# ===================== Format Code ================================
+
+.PHONY: format-python
+format-python:
+	@echo "==> Formatting Python files..."
+	@find . -name "*.py" -not -path "./venv/*" | xargs autopep8 --in-place --aggressive --aggressive || (echo "Python formatting failed" && exit 1)
+	@echo "DONE ==> Formatting Python files"
+
+.PHONY: prettier-write
+prettier-write:
+	@echo "==> Formatting code with prettier..."
+	@npx prettier --write . || (echo "Prettier formatting failed" && exit 1)
+	@echo "DONE ==> Formatting code with prettier"
+
+# ===================== Licensing Management ========================
+
+.PHONY: add-licensing
+add-licensing:
+	@reuse annotate --template template $(ADDITIONAL_LICENSING_ARGS) --merge-copyrights --copyright-prefix="spdx-c" --copyright="Intel Corporation" --license="LicenseRef-Intel-Edge-Software" $(FILE) || (echo "Adding license failed" && exit 1)
 
 # ===================== Docker Compose Demo ==========================
 
